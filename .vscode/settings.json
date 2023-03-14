@@ -1,0 +1,8 @@
+{
+    "cmake.configureOnOpen": true,
+    "files.associations": {
+        "*.plh": "cpp",
+        "*.ph": "cpp",
+        "*.tlh": "cpp"
+    }
+}
