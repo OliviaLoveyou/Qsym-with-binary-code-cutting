@@ -39,6 +39,7 @@ def main():
             args.name, args.filename, args.mail, args.asan_bin)
     try:
         e.run()
+        
     finally:
         e.cleanup()
 

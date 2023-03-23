@@ -1,6 +1,8 @@
 #include <set>
 #include <byteswap.h>
 #include "solver.h"
+//**************
+
 
 namespace qsym {
 
@@ -105,6 +107,9 @@ Solver::Solver(
 
   checkOutDir();
   readInput();
+
+  //************
+  fprintf(stderr, "Solver is Called ==============================================: ");
 }
 
 void Solver::push() {
@@ -147,8 +152,18 @@ z3::check_result Solver::check() {
 }
 
 bool Solver::checkAndSave(const std::string& postfix) {
+  //***************
+  if(postfix=="optimistic"){
+    ADDRINT last_addr = JccAddr.back();
+    JccAddr.clear();
+    JccAddr.push_back(last_addr);
+  }
+  //**************
   if (check() == z3::sat) {
     saveValues(postfix);
+    //****************
+    saveJccAddr();
+    //****************
     return true;
   }
   else {
@@ -182,8 +197,16 @@ void Solver::addJcc(ExprRef e, bool taken, ADDRINT pc) {
   else
     is_interesting = isInterestingJcc(e, taken, pc);
 
-  if (is_interesting)
+  //origin code:
+  // if (is_interesting)
+  //   negatePath(e, taken);
+  //********************
+  if (is_interesting){
+    JccAddr.push_back(pc);
     negatePath(e, taken);
+  }
+
+  //********************
   addConstraint(e, taken, is_interesting);
 }
 
@@ -310,6 +333,33 @@ std::vector<UINT8> Solver::getConcreteValues() {
   }
   return values;
 }
+
+//*******************
+void Solver::saveJccAddr() {
+
+  // // If no output directory is specified, then just print it out
+  // if (out_dir_.empty()) {
+  //   //printValues(values);
+  //   return;
+  // }
+
+  std::string fname = out_dir_+ "/" + "addressToEdit";
+  ofstream of(fname, std::ofstream::out | std::ofstream::binary);
+  LOG_INFO("New address to edit: " + fname + "\n");
+  if (of.fail())
+    LOG_FATAL("Unable to open a file to write results\n");
+
+      // TODO: batch write
+      for (unsigned i = 0; i < JccAddr.size(); i++) {
+        //char val = values[i];
+        ADDRINT addr = JccAddr[i];
+        of.write((const char*)&addr, sizeof(addr));
+      }
+
+  of.close();
+}
+//*******************
+
 
 void Solver::saveValues(const std::string& postfix) {
   std::vector<UINT8> values = getConcreteValues();

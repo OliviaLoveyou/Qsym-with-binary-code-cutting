@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <string>
 
 #include "pin.H"
 
@@ -28,7 +29,12 @@ public:
       const std::string input_file,
       const std::string out_dir,
       const std::string bitmap);
-
+  //**************
+  ~Solver(){
+    // fprintf(stderr, "~Solver is called ================== ");
+    //printJccAddr();
+  }
+  //**************
   void push();
   void reset();
   void pop();
@@ -61,6 +67,11 @@ protected:
   uint64_t              solving_time_;
   ADDRINT               last_pc_;
   DependencyForest<Expr> dep_forest_;
+  //added to save JCC address 
+  std::vector<ADDRINT> JccAddr;
+
+  void saveJccAddr();
+  //added to save JCC address
 
   void checkOutDir();
   void readInput();

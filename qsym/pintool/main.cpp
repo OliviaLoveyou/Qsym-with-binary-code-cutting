@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <set>
 
+
 #include "third_party/libdft/syscall_hook.h"
 #include "third_party/libdft/api.h"
 #include "solver.h"
@@ -92,6 +93,7 @@ void initializeGlobalContext(
 } // anonymous namespace
 
 int main(int argc, char** argv) {
+  
   PIN_InitSymbols();
 
   if (PIN_Init(argc, argv))

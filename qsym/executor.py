@@ -42,6 +42,7 @@ class ExecutorResult(object):
         self.solving_time = min(self.solving_time, self.total_time)
 
 class Executor(object):
+    #cmd is /home/yk/example/test-no(the target binary file)
     def __init__(self, cmd, input_file, output_dir,
             bitmap=None, argv=None):
         self.cmd = cmd
@@ -167,3 +168,10 @@ class Executor(object):
                 continue
             path = os.path.join(self.testcase_dir, name)
             yield path
+    
+    #*************************************
+    def get_jccaddrfile(self):
+        filePath = os.path.join(
+                self.testcase_dir,"addressToEdit")
+        return filePath
+        

@@ -17,6 +17,8 @@ from conf import SO
 import executor
 import minimizer
 import utils
+#******************
+import struct
 
 DEFAULT_TIMEOUT = 90
 MAX_TIMEOUT = 10 * 60 # 10 minutes
@@ -126,6 +128,9 @@ class AFLExecutor(object):
         self.mail = mail
         self.set_asan_cmd(asan_bin)
 
+        #**************************
+        self.addrlist = set()
+
         self.tmp_dir = tempfile.mkdtemp()
         cmd, afl_path, qemu_mode = self.parse_fuzzer_stats()
         self.minimizer = minimizer.TestcaseMinimizer(
@@ -220,6 +225,7 @@ class AFLExecutor(object):
 
     def run_target(self):
         # Trigger linearlize to remove complicate expressions
+        #cmd for Executor is the target bianry file
         q = executor.Executor(self.cmd, self.cur_input, self.tmp_dir, bitmap=self.bitmap, argv=["-l", "1"])
         ret = q.run(self.state.timeout)
         logger.debug("Total=%d s, Emulation=%d s, Solver=%d s, Return=%d"
@@ -369,6 +375,9 @@ class AFLExecutor(object):
         self.handle_by_return_code(ret, fp)
         self.state.processed.add(fp)
 
+        #*********************// process tish round qsym processed jcc addr
+        processJccAddr(q.get_jccaddrfile())
+
         target = os.path.basename(fp)[:len("id:......")]
         num_testcase = 0
         for testcase in q.get_testcases():
@@ -397,3 +406,51 @@ class AFLExecutor(object):
         logger.debug("%d testcases are new" % (self.state.index - old_idx))
 
         self.check_crashes()
+
+    #***************************
+    def processJccAddr(self,fileName):
+        if not os.path.exists(fileName):
+            logger.debug("addressToEdit file not exists !!!!")
+        fin = open(fileName,"rb")
+        rawData = fin.read()    #bytes
+        fin.close()
+
+        iSampleCount = len(rawData)//8
+        addrData = []
+        for i in range(iSampleCount):
+            llData = struct.unpack("<Q",rawData[i*8:i*8+8])[0] #transform to unsigned long long
+            addrData.append(llData)
+        #transform to string 
+        for addr in addrData:
+            self.addrlist.add(hex(addr))
+            #logger for debug
+            logger.debug("JCC ADDR TO EDIT: "+ "0x{:0>16}".format(hex(addr)[2:]))
+
+    #**************************
+    #use objdump and jdb to edit target binary file
+    def editBianryFile(self):
+        #self.cmd is the target bianry file for Executor
+        # self.cmd = "/home/yk/example/test-no"
+        #get file name
+        pathElement = self.cmd.split('/')
+        targetFile = pathElement[-1]
+
+        #if cut, return
+        if targetFile.startswith("cutTrue-") or targetFile.startswith("cutFalse-"):
+            return
+        
+        #cut True Branch
+        pathElement[-1] = "cutTrue-"+targetFile
+
+        str = "/"
+        #/home/yk/example/cutTrue-test-no
+        dest = str.join(pathElement)
+        shutil.copy2(self.cmd, dest)
+        logger.debug("Creating: %s" % dest)
+
+
+    
+
+
+
+        
