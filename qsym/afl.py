@@ -376,7 +376,10 @@ class AFLExecutor(object):
         self.state.processed.add(fp)
 
         #*********************// process tish round qsym processed jcc addr
-        processJccAddr(q.get_jccaddrfile())
+        
+        logger.debug("before process jcc addr :")
+        jccaddrfilePath = q.get_jccaddrfile()
+        self.processJccAddr(jccaddrfilePath)
 
         target = os.path.basename(fp)[:len("id:......")]
         num_testcase = 0
@@ -409,6 +412,7 @@ class AFLExecutor(object):
 
     #***************************
     def processJccAddr(self,fileName):
+        logger.debug("enter processJccAddr !!!!")
         if not os.path.exists(fileName):
             logger.debug("addressToEdit file not exists !!!!")
         fin = open(fileName,"rb")
@@ -424,7 +428,8 @@ class AFLExecutor(object):
         for addr in addrData:
             self.addrlist.add(hex(addr))
             #logger for debug
-            logger.debug("JCC ADDR TO EDIT: "+ "0x{:0>16}".format(hex(addr)[2:]))
+            logger.debug("JCC ADDR TO EDIT: "+ hex(addr))
+        logger.debug("addrlist size %d" % len(self.addrlist))
 
     #**************************
     #use objdump and jdb to edit target binary file
