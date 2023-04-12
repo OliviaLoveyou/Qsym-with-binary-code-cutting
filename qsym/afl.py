@@ -130,6 +130,37 @@ class AFLExecutor(object):
 
         #**************************
         self.addrlist = set()
+        #self.dict Truebranch map,OPcode==>rewrite code
+	    #NOP is '90', 8 bits 1 byte
+	    #Make a table of these two mappings and write them in the paper
+        self.trueBranchMap = {
+	    '7f': '9090', '7e': '9090', '7d': '9090', '7c': '9090', '7b': '9090', 
+	    '7a': '9090', '79': '9090', '78': '9090', '77': '9090', '76': '9090', 
+	    '75': '9090', '74': '9090', '73': '9090', '72': '9090', '71': '9090',
+	    '70': '9090', 'e3': '9090',
+	    '0f89' : '909090909090', '0f88' : '909090909090', '0f87' : '909090909090',
+	    '0f86' : '909090909090', '0f85' : '909090909090', '0f84' : '909090909090',
+	    '0f83' : '909090909090', '0f82' : '909090909090', '0f81' : '909090909090',
+	    '0f80' : '909090909090', '0f8f' : '909090909090', '0f8e' : '909090909090',
+	    '0f8d' : '909090909090', '0f8c' : '909090909090', '0f8b' : '909090909090',
+	    '0f8a' : '909090909090'
+	    }
+        #trsansform to jmp instruction machine code
+	    #jmp rel8 : eb
+	    #jmp rel32 : e9
+        self.falseBranchMap = {
+	    '7f': 'eb', '7e': 'eb', '7d': 'eb', '7c': 'eb', '7b': 'eb', 
+	    '7a': 'eb', '79': 'eb', '78': 'eb', '77': 'eb', '76': 'eb', 
+	    '75': 'eb', '74': 'eb', '73': 'eb', '72': 'eb', '71': 'eb',
+	    '70': 'eb', 'e3': 'eb',
+	    '0f89' : 'e990', '0f88' : 'e990', '0f87' : 'e990',
+	    '0f86' : 'e990', '0f85' : 'e990', '0f84' : 'e990',
+	    '0f83' : 'e990', '0f82' : 'e990', '0f81' : 'e990',
+	    '0f80' : 'e990', '0f8f' : 'e990', '0f8e' : 'e990',
+	    '0f8d' : 'e990', '0f8c' : 'e990', '0f8b' : 'e990',
+	    '0f8a' : 'e990'
+	    }
+        #**************************
 
         self.tmp_dir = tempfile.mkdtemp()
         cmd, afl_path, qemu_mode = self.parse_fuzzer_stats()
@@ -370,14 +401,14 @@ class AFLExecutor(object):
 
         old_idx = self.state.index
         logger.debug("Run qsym: input=%s" % fp)
-
+        #logger.debug("Test logger.debug !!!!!!!!")
         q, ret = self.run_target()
         self.handle_by_return_code(ret, fp)
         self.state.processed.add(fp)
 
-        #*********************// process tish round qsym processed jcc addr
+        #*********************// process this round qsym processed jcc addr
         
-        logger.debug("before process jcc addr :")
+        #logger.debug("Before process jcc addr :")
         jccaddrfilePath = q.get_jccaddrfile()
         self.processJccAddr(jccaddrfilePath)
 
@@ -412,18 +443,19 @@ class AFLExecutor(object):
 
     #***************************
     def processJccAddr(self,fileName):
-        logger.debug("enter processJccAddr !!!!")
+        #logger.debug("Enter processJccAddr !!!!")
         if not os.path.exists(fileName):
-            logger.debug("addressToEdit file not exists !!!!")
+            logger.debug("AddressToEdit file not exists !")
+            return
         fin = open(fileName,"rb")
         rawData = fin.read()    #bytes
         fin.close()
 
         iSampleCount = len(rawData)//8
-        addrData = []
+        addrData = set()
         for i in range(iSampleCount):
             llData = struct.unpack("<Q",rawData[i*8:i*8+8])[0] #transform to unsigned long long
-            addrData.append(llData)
+            addrData.add(llData)
         #transform to string 
         for addr in addrData:
             self.addrlist.add(hex(addr))
@@ -432,13 +464,66 @@ class AFLExecutor(object):
         logger.debug("addrlist size %d" % len(self.addrlist))
 
     #**************************
+    def getObjdumpCmd(self,filename,startAddress,stopAddress):
+        cmd = ['objdump','-d']
+        cmd.append(filename)
+        cmd.append('--start-address='+startAddress)
+        cmd.append('--stop-address='+stopAddress)
+        return cmd
+    
+    def addrAdd(self,addr,i):
+        hex_str = addr[2:]
+        num = int(hex_str,16)
+        num+=i
+        newAddr = hex(num)
+        return newAddr
+    
+    def dumpAndMap(self,argMap,targetBin):
+        machineCode = dict()
+        for startAddress in self.addrlist:
+            stopAddress = self.addrAdd(startAddress,6)
+            objdumpCmd = self.getObjdumpCmd(targetBin,startAddress,stopAddress)
+            process = subprocess.Popen(objdumpCmd, shell = False, stdout=subprocess.PIPE)
+            output,error = process.communicate()
+            #print('output type:') # <type 'str'>
+            lineToEdit = output.splitlines()
+            #print(lineToEdit[7])#the start addr line
+            lineElement = lineToEdit[7].split()
+            logger.debug(lineElement)
+            if not lineElement[0].startswith(startAddress[2:]):
+                logger.debug('objdump dumped wrong address !')
+            #machineCode[startAddress]=map[lineElement[1]+lineElement[2]]
+            if argMap.has_key(lineElement[1]):
+                machineCode[startAddress] = argMap[lineElement[1]]			
+            elif argMap.has_key(lineElement[1]+lineElement[2]):
+                machineCode[startAddress] = argMap[lineElement[1]+lineElement[2]]
+            else:
+                logger.debug('JCC instruction machine code match error !')
+        return machineCode
+    
+    def rewrite(self,addrToCode,targetBin):
+        gdbProcess = subprocess.Popen(['gdb'],stdin=subprocess.PIPE,stdout=subprocess.PIPE)
+        gdbProcess.stdin.write('set write on\n')
+        gdbProcess.stdin.write('file '+targetBin+'\n')
+        for addr,code in addrToCode.items():
+            setcount = len(code)//2
+            for i in range(setcount):
+                cmd = 'set variable *(char*)'
+                cmd+=self.addrAdd(addr,i)+'=0x'+code[i*2:i*2+2]+'\n'
+                gdbProcess.stdin.write(cmd)
+                disassCmd = 'disassemble '+addr+'\n'
+                gdbProcess.stdin.write(disassCmd)
+        gdbProcess.stdin.write('q\n')
+
     #use objdump and jdb to edit target binary file
     def editBianryFile(self):
-        #self.cmd is the target bianry file for Executor
-        # self.cmd = "/home/yk/example/test-no"
+        #self.cmd[0] is the target bianry file for Executor
+        # self.cmd = ['/home/yk/example/test-no','@@']
         #get file name
-        pathElement = self.cmd.split('/')
+        pathElement = self.cmd[0].split('/')
+        #pathElement = self.cmd
         targetFile = pathElement[-1]
+        sourceFile = self.cmd[0]
 
         #if cut, return
         if targetFile.startswith("cutTrue-") or targetFile.startswith("cutFalse-"):
@@ -447,11 +532,22 @@ class AFLExecutor(object):
         #cut True Branch
         pathElement[-1] = "cutTrue-"+targetFile
 
-        str = "/"
+        str = '/'
         #/home/yk/example/cutTrue-test-no
-        dest = str.join(pathElement)
-        shutil.copy2(self.cmd, dest)
-        logger.debug("Creating: %s" % dest)
+        trueBranchFile = str.join(pathElement)
+        shutil.copy2(sourceFile, trueBranchFile)
+        logger.debug("Creating: %s" % trueBranchFile)
+        addrToCode = self.dumpAndMap(self.trueBranchMap,trueBranchFile)
+        self.rewrite(addrToCode,trueBranchFile)
+
+        #cut false branch
+        pathElement[-1]="cutFalse-"+targetFile
+        str = '/'
+        falseBranchFile = str.join(pathElement)
+        shutil.copy2(sourceFile, falseBranchFile)
+        logger.debug("Createing: %s" % falseBranchFile)
+        addrToCode = self.dumpAndMap(self.falseBranchMap,falseBranchFile)
+        self.rewrite(addrToCode,falseBranchFile)
 
 
     

@@ -109,7 +109,7 @@ Solver::Solver(
   readInput();
 
   //************
-  fprintf(stderr, "Solver is Called ==============================================: ");
+  //fprintf(stderr, "Solver is Called ==============================================: ");
 }
 
 void Solver::push() {
@@ -344,7 +344,7 @@ void Solver::saveJccAddr() {
   // }
 
   std::string fname = out_dir_+ "/" + "addressToEdit";
-  ofstream of(fname, std::ofstream::out | std::ofstream::binary);
+  ofstream of(fname, std::ofstream::app | std::ofstream::binary );
   LOG_INFO("New address to edit: " + fname + "\n");
   if (of.fail())
     LOG_FATAL("Unable to open a file to write results\n");

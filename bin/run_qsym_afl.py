@@ -41,6 +41,7 @@ def main():
         e.run()
         
     finally:
+        e.editBianryFile()
         e.cleanup()
 
 if __name__ == "__main__":
